@@ -9,7 +9,6 @@ USE `ecommerce_store`;
 
 --
 -- Table structure for table `users`
--- A user can have multiple orders and multiple addresses.
 --
 CREATE TABLE `users` (
   `user_id` INT AUTO_INCREMENT,
@@ -24,7 +23,6 @@ CREATE TABLE `users` (
 
 --
 -- Table structure for table `categories`
--- A category can contain multiple products.
 --
 CREATE TABLE `categories` (
   `category_id` INT AUTO_INCREMENT,
@@ -36,8 +34,6 @@ CREATE TABLE `categories` (
 
 --
 -- Table structure for table `products`
--- A product belongs to one primary category (for simplicity, though a many-to-many join table is also common).
--- It can be part of many different orders.
 --
 CREATE TABLE `products` (
   `product_id` INT AUTO_INCREMENT,
@@ -49,51 +45,44 @@ CREATE TABLE `products` (
   PRIMARY KEY (`product_id`),
   FOREIGN KEY (`category_id`) 
     REFERENCES `categories`(`category_id`)
-    ON DELETE SET NULL -- If a category is deleted, the product is not deleted, just uncategorized
+    ON DELETE SET NULL
 );
 
 --
 -- Table structure for table `orders`
--- This represents a single order placed by a user.
--- This is a one-to-many relationship: One user can have many orders.
 --
 CREATE TABLE `orders` (
   `order_id` INT AUTO_INCREMENT,
   `user_id` INT NOT NULL,
   `order_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `status` ENUM('pending', 'processing', 'shipped', 'delivered', 'cancelled') NOT NULL DEFAULT 'pending',
-  `total_amount` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  
   PRIMARY KEY (`order_id`),
   FOREIGN KEY (`user_id`) 
     REFERENCES `users`(`user_id`)
-    ON DELETE CASCADE -- If a user is deleted, their orders are also deleted
+    ON DELETE CASCADE
 );
 
 --
 -- Table structure for table `order_items`
--- This is the "join table" that resolves the many-to-many relationship
--- between `orders` and `products`.
--- An order can have many products, and a product can be in many orders.
 --
 CREATE TABLE `order_items` (
   `order_item_id` INT AUTO_INCREMENT,
   `order_id` INT NOT NULL,
   `product_id` INT NOT NULL,
   `quantity` INT NOT NULL,
-  `price_at_purchase` DECIMAL(10, 2) NOT NULL, -- Price when ordered, as product price might change
+  `price_at_purchase` DECIMAL(10, 2) NOT NULL, 
   PRIMARY KEY (`order_item_id`),
   FOREIGN KEY (`order_id`) 
     REFERENCES `orders`(`order_id`)
-    ON DELETE CASCADE, -- If an order is deleted, its items are deleted
+    ON DELETE CASCADE,
   FOREIGN KEY (`product_id`) 
     REFERENCES `products`(`product_id`)
-    ON DELETE RESTRICT -- Prevent deleting a product if it's part of an order
+    ON DELETE RESTRICT
 );
 
 --
 -- Table structure for table `addresses`
--- This represents a shipping or billing address for a user.
--- This is a one-to-many relationship: One user can have multiple addresses.
 --
 CREATE TABLE `addresses` (
   `address_id` INT AUTO_INCREMENT,
@@ -108,5 +97,82 @@ CREATE TABLE `addresses` (
   PRIMARY KEY (`address_id`),
   FOREIGN KEY (`user_id`) 
     REFERENCES `users`(`user_id`)
-    ON DELETE CASCADE -- If a user is deleted, their addresses are deleted
+    ON DELETE CASCADE
 );
+
+--
+-- =================================================================
+-- POPULATE DATABASE WITH SAMPLE DATA
+-- =================================================================
+--
+-- Note: Data is inserted in order to satisfy foreign key constraints.
+
+-- 1. Insert Users
+-- (Passwords are just strings, in a real app they should be securely hashed)
+INSERT INTO `users` (`first_name`, `last_name`, `email`, `password_hash`) 
+VALUES
+('Alice', 'Smith', 'alice@example.com', 'hash12345'),
+('Bob', 'Johnson', 'bob@example.com', 'hash67890'),
+('Charlie', 'Brown', 'charlie@example.com', 'hashabcde');
+
+-- 2. Insert Categories
+INSERT INTO `categories` (`category_name`, `description`) 
+VALUES
+('Electronics', 'Gadgets, computers, and accessories'),
+('Books', 'Fiction, non-fiction, and educational books'),
+('Clothing', 'Apparel for men, women, and children');
+
+-- 3. Insert Products
+-- (Note how `category_id` links to the categories above)
+INSERT INTO `products` (`name`, `description`, `price`, `stock_quantity`, `category_id`) 
+VALUES
+('Laptop Pro', 'A high-performance laptop for professionals.', 1299.99, 50, 1),
+('Smartphone X', 'The latest smartphone with advanced features.', 899.99, 150, 1),
+('Wireless Headphones', 'Noise-cancelling over-ear headphones.', 199.99, 200, 1),
+('The SQL Enigma', 'A mystery novel where the clue is in the database.', 24.99, 500, 2),
+('Learn Python', 'A comprehensive guide to Python programming.', 39.99, 300, 2),
+('Classic T-Shirt', 'A comfortable 100% cotton t-shirt.', 19.99, 1000, 3);
+
+-- 4. Insert Addresses
+-- (Note how `user_id` links to the users above)
+INSERT INTO `addresses` (`user_id`, `address_line1`, `city`, `state_province`, `postal_code`, `country`, `is_default`) 
+VALUES
+(1, '123 Main St', 'New York', 'NY', '10001', 'USA', TRUE),
+(1, '456 Second Ave', 'Brooklyn', 'NY', '11201', 'USA', FALSE),
+(2, '789 Oak Ln', 'Chicago', 'IL', '60601', 'USA', TRUE);
+
+-- 5. Insert Orders
+-- (We will create two orders, one for Alice (user 1) and one for Bob (user 2))
+-- (Total amount is pre-calculated for this sample data)
+INSERT INTO `orders` (`user_id`, `status`) 
+VALUES
+(1, 'shipped'),  -- Alice's order (1x Laptop Pro + 1x Wireless Headphones)
+(2, 'pending');    -- Bob's order (2x The SQL Enigma + 1x Learn Python)
+
+-- 6. Insert Order Items
+-- (Linking Orders and Products)
+-- Order 1 (for Alice)
+INSERT INTO `order_items` (`order_id`, `product_id`, `quantity`, `price_at_purchase`) 
+VALUES
+(1, 1, 1, 1299.99), -- Order 1, Product 1 (Laptop Pro)
+(1, 3, 1, 199.99);  -- Order 1, Product 3 (Wireless Headphones)
+
+-- Order 2 (for Bob)
+INSERT INTO `order_items` (`order_id`, `product_id`, `quantity`, `price_at_purchase`) 
+VALUES
+(2, 4, 2, 24.99), -- Order 2, Product 4 (The SQL Enigma), Qty 2
+(2, 5, 1, 39.99);  -- Order 2, Product 5 (Learn Python), Qty 1
+
+SELECT
+  o.order_id,
+  o.user_id,
+  o.status,
+  o.order_date,
+  -- Calculate the true total from order_items
+  SUM(oi.quantity * oi.price_at_purchase) AS total_amount
+FROM 
+  `orders` o
+JOIN 
+  `order_items` oi ON o.order_id = oi.order_id
+GROUP BY
+  o.order_id;
